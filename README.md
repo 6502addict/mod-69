@@ -1,21 +1,13 @@
 # MOD-69
-Adapter to plug a 6809 or 6809E on a 6502 socket
-<br>
 ![al-tag](http://netfilters.eu/github/MOD-69.PNG)
 <br>
+# Adapter to plug a 6809 or 6809E on a 6502 socket
+<br>
 ## Description
-this cartridge is compatible with thomson MO5 64k cartridge
-it's not a exact copy of the original cartridge<br>
-but rather a rebuild from the manual
+This module permit to connect a 6809 or a 6809E processor
+into a 6502 socket.
 <br>
-the $A7CB register controlling a MO5 64 cartrige is extended
-to permit the access to 512k of memory
-<br>
-without the 3 jumpers the cartridge is behaving as the 
-original thomson MEMO5 cartridge
-<br>
-with the jumpers set the cartridge can address 512k or memory
-<br>
+This type of product existed ont the Synertek SYM-1
 
 ## Note:
 
@@ -43,26 +35,31 @@ the pcb can be ordered from oshpark<br>
 https://oshpark.com/shared_projects/tMBBF8oK
 
 ## Bill of Materials
-* 1 x socket  dip 32  600mil
-* 3 x sockets dip 20  300mil
-* 1 74LS273
-* 1 RAM Alliance AS6C4008
-* 2 GAL Lattice 16v8D
-* 1 diode 1N4148
-* 5 resistor 10k    1206
-* 5 capacitor 100nf 1206
-* 1 block of 3 jumpers
-
-
+* 1 PLCC 44 socket
+* 1 DIP 40 socket 600mil
+* 1 Pin Header Strip 1 Row Machined 40Pin Male Round
+    break the strip in 2 x 20 pin 
+* 1 EPM7064S
+* 1 NB3N502DG
+* 4 resistors  3.3k  1206
+* 2 resistors   10k  1206
+* 6 capacitors 100nf 1206
+* 1 2.54mm 2x5 male pin header
+* 1 2.54mm 2x8 male pin header
+* 2 jumpers
 
 ## Build of the board
 the easiest is to solder the component in the following order<br>
-1. 5 100nf capacitor (back of the board)<br>
-2. 5 10k resistor (back of the board)<br>
-3. 4 sockets<br
-4. BC547B<br>
-5. 1N4148<br>
-6. jumpers<br>
+1. NB3N502DG<br>
+2. 6 x 100nf capacitors<br>
+3. 2 x 10k resistors<br>
+4. 4 x 3.3k resistors<br>
+5. PLCC4 sockets<br
+6. DIP 40 socket<br>
+7. 2.54mm 2x5 male pin header (jtag)
+8. 2.54mm 2x8 male pin header (options)
+9. insert a jumper on IRQ or FIRQ
+10. insert a jumper on 69E if you want to use a 6809E
 
 # Machines tested
 
