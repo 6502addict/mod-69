@@ -1,7 +1,6 @@
 # MOD-69
 <br>
 Adapter to plug a 6809 or 6809E on a 6502 socket
-<br>
 ![al-tag](http://netfilters.eu/github/MOD-69.PNG)
 <br>
 ## Description
