@@ -1,4 +1,5 @@
-# mod-69
+# MOD-69
+<br>
 Adapter to plug a 6809 or 6809E on a 6502 socket
 <br>
 ![al-tag](http://netfilters.eu/github/MOD-69.PNG)
@@ -18,22 +19,6 @@ with the jumpers set the cartridge can address 512k or memory
 <br>
 
 ## Note:
-The first goal of this board was to replace the original thomson board of 64K
-<br>
-with the use of modern chips it is easier to find a 128k or 512k chip than 64k
-<br>
-so I designed the 64k compatibility as the main feature and the extension
-<br>
-to 128k or 512k (dépending on the ram chip used AS6C1008 or AS6C4008) as goody.
-<br>
-Due to negative comment on forums saying that this extra memory is useless
-<br>
-I've listened this comments and removed the jumpers permitting to exploit
-<br>
-the extra memory.
-<br>
-As a few 512k board exist I let 512k test procedure and manual
-but eagle files are now for 64k boards
 
 
 
