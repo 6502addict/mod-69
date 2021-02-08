@@ -9,17 +9,25 @@ into a 6502 socket.
 <br>
 This type of product existed ont the Synertek SYM-1
 
-## Note:
+## ChangeLog:
 
+1.2  Rework of the silk mask
+     2 10k pull up added on IRQ and FIRQ lines
+
+1.1  oscillator replace by a frequency multiplier
+     connected to phi0
+     dip switch replaced by jumpers
+     
+1.0  initial version using a 50Mhz oscillator
 
 
 ## JUMPERS
 ```
-OP1     option for futur expantion
-OP0     option for futur expantion
+OP1     reserved for futur function
+OP0     reserved for futur function
 SAL     select 65XX socket type
-           jumper removed: SALLY
-           jumper set:     standard 6502
+           jumper removed: standard 6502
+           jumper set:     6502C (SALLY)
 69E     select 6809/6809E processor type
            jumper removed: 6809  (no support for sync) 
            jumper set:     6809E (support for sync)
@@ -29,6 +37,8 @@ U1      DO NOT USE... (for debug)
 U0      DO NOT USE... (for debug)
 ```
 
+## Note
+* Even if it was planned SALLY is not yet supported
 
 ## PCB
 the pcb can be ordered from oshpark<br>
@@ -54,12 +64,15 @@ the easiest is to solder the component in the following order<br>
 2. 6 x 100nf capacitors<br>
 3. 2 x 10k resistors<br>
 4. 4 x 3.3k resistors<br>
-5. PLCC4 sockets<br
-6. DIP 40 socket<br>
-7. 2.54mm 2x5 male pin header (jtag)
-8. 2.54mm 2x8 male pin header (options)
-9. insert a jumper on IRQ or FIRQ
-10. insert a jumper on 69E if you want to use a 6809E
+5. 2 x 20 pin strips<br>
+   install the strips before the 40 pin DIP socket !!!<br>
+   use a breadboard or another socket to align correctly the pins<br>
+6. PLCC4 sockets<br
+7. DIP 40 socket<br>
+8. 2.54mm 2x5 male pin header (jtag)
+9. 2.54mm 2x8 male pin header (options)
+10. insert a jumper on IRQ or FIRQ
+11. insert a jumper on 69E if you want to use a 6809E
 
 # Machines tested
 
