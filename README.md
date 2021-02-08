@@ -1,8 +1,12 @@
 # MOD-69
 ![al-tag](http://netfilters.eu/github/MOD-69.PNG)
 <br>
-# Adapter to plug a 6809 or 6809E on a 6502 socket
-<br>
+
+
+
+
+
+
 ## Description
 This module permit to connect a 6809 or a 6809E processor
 into a 6502 socket.
@@ -38,7 +42,7 @@ U0      DO NOT USE... (for debug)
 ```
 
 ## Note
-* Even if it was planned SALLY is not yet supported
+* Even if SALLY it was planned, it is not yet supported
 
 ## PCB
 the pcb can be ordered from oshpark<br>
@@ -73,6 +77,30 @@ the easiest is to solder the component in the following order<br>
 9. 2.54mm 2x8 male pin header (options)
 10. insert a jumper on IRQ or FIRQ
 11. insert a jumper on 69E if you want to use a 6809E
+
+## CPLD Progamming
+The programming files are in vhdl directory<br>
+you need Quartus II 13.0sp1 to modify this project<br>
+the CPLD type is an EPM7064S PLCC 44<br>
+<br>
+To import this project in Quartus<br>
+create a new project name "mod-69"<br>
+and insert the files from github<br>
+the top level is "mod69.vhd"<br>
+<br>
+if you only want to program the CPLD<br>
+connect the adapter to a USB Blaster with a flat
+cable then use the mod69.pof.<br>
+
+# Futur Enhancement...
+Only a half of cpld capacity is used so there is
+enough room to support sally or solve conflit 
+on some specific machines...
+
+the jumper OP1 et OP2 are there to solve 
+specific cases
+
+
 
 # Machines tested
 
