@@ -7,7 +7,7 @@ take an eprom prorammer and but mon6809.hex
 
 after a reset the monitor display:
 
-
+''
 Commands:
 M ADDR1 ADDR2                   display the memory from ADDR1 to ADDR2
 F ADDR1 ADDR2 01 02...          fill the memory from ADDR1 to ADDR2 with the pattern 01 02 ... (the pattern is repeated until the area is filled)
@@ -18,5 +18,5 @@ H ADDR1 ADDR2 01 02...          hunt the memory from ADDR1 to ADDR2 and list the
 X                               leave the monitor if called from another application
 
 Note: for the commands C , H and :the pattern can include strings  example:   01 02 "Hello" 03 04
-
+''
 
