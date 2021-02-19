@@ -3,7 +3,7 @@
 Eprom Build:
 
 use for example an AT28C256 from Atmel
-take an eprom prorammer and but mon6809.hex
+take an eprom prorammer and burn mon6809.hex
 
 after a reset the monitor display:
 
