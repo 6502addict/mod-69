@@ -2,11 +2,6 @@
 ![al-tag](http://netfilters.eu/github/MOD-69.PNG)
 <br>
 
-
-
-
-
-
 ## Description
 This module permit to connect a 6809 or a 6809E processor
 into a 6502 socket.
@@ -112,6 +107,10 @@ specific cases
 # Machines tested
 
 ## SYNERTEK SYM-1
+the SYM-1 worked fine with my first version of MOD-69
+but the way the clock is generated on the SYM-1 makes it incompatible with my second MOD-69
+I'm preparing a third version to fix the probleme
 
 ## REPLICA 1
+Works fine with my second version of MOD-69 either with a 6809 or a 6809E as well as with 6309/6309E
 
