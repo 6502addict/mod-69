@@ -13,6 +13,13 @@ into a 6502 socket.
 <br>
 This type of product existed ont the Synertek SYM-1
 
+## Note:
+this development is just for fun there is no warranty of any kind
+that this mod-69 will work on your machine...
+please report the success / failure...
+I'll try to improved the mod-69 and support new machines
+as well as the 6809 monitor code
+
 ## ChangeLog:
 
 1.2  Rework of the silk mask
