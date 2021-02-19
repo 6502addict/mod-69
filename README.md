@@ -113,11 +113,15 @@ I'm preparing a third version to fix the probleme
 
 ## REPLICA 1
 Works fine with my second version of MOD-69 either with a 6809 or a 6809E as well as with 6309/6309E
+<br>
 ![al-tag](https://github.com/6502addict/mod-69/Photo/replica1-mod69.PNG)
+<br>
 REPLICA 1 with MOD-69 plugged in place of the 6502
-
+<br>
+<br>
 ![al-tag](https://github.com/6502addict/mod-69/Photo/replica1-6809.PNG)
+<br>
 REPLICA 1 Running the 6809 monitor
-
+<br>
 
 
