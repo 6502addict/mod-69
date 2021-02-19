@@ -1,0 +1,1210 @@
+                      *------------------------------------------------------
+                      *------------------------------------------------------
+                      * Test program for a Vince Briel REPLICA 1
+                      * modified to run with a 6809
+                      *------------------------------------------------------
+                      *------------------------------------------------------
+                      
+0000                  REPLICA1        EQU     0
+                      
+0000                  SYS_EXIT        EQU     $00
+0001                  SYS_OUTPUT      EQU     $01
+0002                  SYS_INPUT       EQU     $02
+                      
+0000                  LEX_SYMBOL      EQU     0
+0001                  LEX_STRING      EQU     1
+                      
+000D                  ENDLINE EQU     $0D
+                      
+D010                  KBD     EQU     $D010   ;  PIA.A keyboard input
+D011                  KBDCR   EQU     $D011   ;  PIA.A keyboard control register
+D012                  DSP     EQU     $D012   ;  PIA.B display output register
+D013                  DSPCR   EQU     $D013   ;  PIA.B display control register
+                      
+002E                  PROMPT  EQU     '.'
+0020                  SPACE   EQU     ' '
+                      
+                              INCLUDE "includes/ascii.inc"
+0000                  ASCII_NULL      EQU     $00     ;- ctrl-@
+0001                  ASCII_SOH       EQU     $01     ;- ctrl-A
+0002                  ASCII_STX       EQU     $02     ;- ctrl-B
+0003                  ASCII_ETX       EQU     $03     ;- ctrl-C
+0004                  ASCII_EOT       EQU     $04     ;- ctrl-D
+0005                  ASCII_ENQ       EQU     $05     ;- ctrl-E
+0006                  ASCII_ACK       EQU     $06     ;- ctrl-F
+0007                  ASCII_BELL      EQU     $07     ;- ctrl-G
+0008                  ASCII_BS        EQU     $08     ;- ctrl-H
+0009                  ASCII_HT        EQU     $09     ;- ctrl-I
+000A                  ASCII_LF        EQU     $0A     ;- ctrl-J
+000B                  ASCII_VT        EQU     $0B     ;- ctrl-K
+000C                  ASCII_FF        EQU     $0C     ;- ctrl-L
+000D                  ASCII_CR        EQU     $0D     ;- ctrl-M
+000E                  ASCII_SO        EQU     $0E     ;- ctrl-N
+000F                  ASCII_SI        EQU     $0F     ;- ctrl-O
+0010                  ASCII_DLE       EQU     $10     ;- ctrl-P
+0011                  ASCII_DC1       EQU     $11     ;- ctrl-Q
+0012                  ASCII_DC2       EQU     $12     ;- ctrl-R
+0013                  ASCII_DC31      EQU     $13     ;- ctrl-S
+0014                  ASCII_DC4       EQU     $14     ;- ctrl-T
+0015                  ASCII_NAK       EQU     $15     ;- ctrl-U
+0016                  ASCII_SYN       EQU     $16     ;- ctrl-V
+0017                  ASCII_ETB       EQU     $17     ;- ctrl-W
+0018                  ASCII_CAN       EQU     $18     ;- ctrl-X
+0019                  ASCII_EM        EQU     $19     ;- ctrl-Y
+001A                  ASCII_SUB       EQU     $1A     ;- ctrl-Z
+001B                  ASCII_ESC       EQU     $1B     ;- ctrl-[
+001C                  ASCII_FS        EQU     $1C     ;- ctrl-\
+001D                  ASCII_GS        EQU     $1D     ;- ctrl-]
+001E                  ASCII_RS        EQU     $1E     ;- ctrl-^
+001F                  ASCII_US        EQU     $1F     ;- ctrl-_
+                      
+0200                          ORG     $0200
+0200                  INPUT   RMB     128     ;- input buffer
+0280                  SCRATCHAREA     RMB     128     ;- used as volatile storage
+                      
+0300                          ORG     $0300
+                              SETDP   $03
+0300                  LEXNXT  RMB     2       ;- next lexer location
+0302                  LEXCUR  RMB     2       ;- current lexer location
+0304                  LEXTYPE RMB     1       ;- token type 0 = SYMBOL, 1 = STRING
+0305                  LINELENGTH      RMB     1       ;- length of the line in the input buffer
+0306                  SRC     RMB     2       ;- source address
+0308                  DST     RMB     2       ;- destination address
+030A                  CURRENT RMB     2       ;- temporary 16 bits pointer    
+030C                  SCRATCHEND      RMB     2       ;- end address in scratch area
+030E                  LEN     RMB     2       ;- length
+0310                  MMOVDIR RMB     1       ;- mmov direction
+0311                  COUNT   RMB     1       ;- item count
+0312                  LOADLEN RMB     1       ;- size of the load chunk
+0313                  LOADTYPE        RMB     1       ;- type of record
+0314                  LOADPTRDEFINED  RMB     1       ;- $00 = load address undefined, $80 load address defined
+0315                  LOADADDR        RMB     2       ;- address in hexa file
+0317                  LOADEND RMB     1       ;- completion byte 00=ended, 01=continue
+0318                  LOADALTADDR     RMB     2       ;- alternate load address
+031A                  XPOS    RMB     1       ;- current input buffer position
+031B                  DOCHKSUM        RMB     1       ;- checksum flag
+031C                  CHKSUM  RMB     2       ;- 16 bits chksum
+                      
+                      * variable used to manage the tabs in output
+031E                  CTAB    RMB     1       ;- current tab
+031F                  NTABS   RMB     1       ;- maximum count of tabs
+0320                  TABSPTR RMB     2       ;- hard tabs pointer
+                      * variable containing the output position
+0322                  ROW     RMB     1       ;- current output row
+0323                  COL     RMB     1       ;- current output column
+                      * variable containing the module name
+0324                  MODULE  RMB     2
+                      * variable used by divide
+                      *DIVIDEND       RMB     2
+                      *QUOTIENT       RMB     2
+                      *DIVISOR        RMB     2
+                      *REMAINDER      RMB     2
+                      *COUNTER        RMB     1
+                      
+                      *------------------------------------------------------
+                      * Initialise the machine
+                      *------------------------------------------------------
+                      
+                              SECTION "CODE"
+E000                          ORG     $E000
+                      
+E000  10CE7FFF        VRESET  LDS     #$7FFF  ; SET SYS STACK POINTER
+E004  CE6FFF                  LDU     #$6FFF  ; SET USR STACK POINTER
+E007  8603                    LDA     #$03
+E009  1F8B                    TFR     A,DP
+E00B  BDE0AD                  JSR     CONINIT
+E00E  BDE2C7                  JSR     PRTCRLF 
+                      
+E011  8EE62E                  LDX     #BANNER 
+E014  8601                    LDA     #SYS_OUTPUT
+E016  3F                      SWI
+                      
+                      *       LDA     #'.'
+                      *       JSR     CONOUT
+                      *       LDX     #256
+                      *       TFR     X,D
+                      *       JSR     PRTWORD
+                      *       JSR     PRTSPACE
+                      *       LDD     #10
+                      *       JSR     PRTWORD
+                      *       JSR     PRTSPACE
+                      *       JSR     DIV
+                      *       JSR     PRTWORD
+                      *       JSR     PRTSPACE
+                      *       TFR     X,D
+                      *       JSR     PRTWORD
+                      *       LDA     #'.'
+                      *       JSR     CONOUT
+                      *       JSR     PRTCRLF
+                      
+E017  863B                    LDA     #';'
+E019  BDE0C7                  JSR     CONOUT
+E01C  8E0100                  LDX     #256
+E01F  1F10                    TFR     X,D
+E021  BDE272                  JSR     PRTWORD
+E024  BDE269                  JSR     PRTSPACE
+E027  108E0008                LDY     #0010
+E02B  1F10                    TFR     X,D
+E02D  BDE272                  JSR     PRTWORD
+E030  BDE269                  JSR     PRTSPACE
+E033  BDE1E4                  JSR     DIVXY
+E036  1F20                    TFR     Y,D
+E038  BDE272                  JSR     PRTWORD
+E03B  BDE269                  JSR     PRTSPACE
+E03E  1F10                    TFR     X,D
+E040  BDE272                  JSR     PRTWORD
+E043  863B                    LDA     #';'
+E045  BDE0C7                  JSR     CONOUT
+E048  BDE2C7                  JSR     PRTCRLF
+                      
+                      
+                      
+E04B  8602            AGAIN   LDA     #SYS_INPUT      
+E04D  C680                    LDB     #$80
+E04F  8E0200                  LDX     #INPUT
+E052  3F                      SWI
+                      
+E053  8601                    LDA     #SYS_OUTPUT
+E055  8E0200                  LDX     #INPUT
+E058  3F                      SWI
+                      
+                      
+E059  BDE333                  JSR     LEXSTART
+E05C  BDE339                  JSR     LEXFETCH
+E05F  25EA                    BCS     AGAIN
+E061  BDE388                  JSR     CMDPARSE
+E064  20E5                    BRA     AGAIN
+                      
+                              INCLUDE "common/console.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * ROWCOL: maintain row/colomn on output 
+                      *------------------------------------------------------
+E066  3402            ROWCOL  PSHS    A
+E068  847F                    ANDA    #$7F
+E06A  B1000D                  CMPA    ENDLINE
+E06D  260A                    BNE     1F
+E06F  0C22                    INC     ROW
+E071  8601                    LDA     #$01
+E073  971E                    STA     CTAB
+E075  86FF                    LDA     #$FF
+E077  9723                    STA     COL
+E079  0C23            1       INC     COL
+E07B  3582                    PULS    A,PC
+                      
+                      *------------------------------------------------------
+                      * SETTABS: set hard tabs
+                      *------------------------------------------------------
+E07D  3402            SETTABS PSHS    A       ;- save A
+E07F  9F20                    STX     TABSPTR ;- store X to tabs pointer
+E081  A684                    LDA     ,X      ;- load first byte
+E083  971F                    STA     NTABS   ;- store tab count
+E085  0C1F                    INC     NTABS   ;- increment tab count
+E087  8601                    LDA     #$01    ;- load 1
+E089  971E                    STA     CTAB    ;- into current tab
+E08B  3582                    PULS    A,PC    ;- restore A and return
+                      
+                      *------------------------------------------------------
+                      * CLEARTABS: clear hard tabs
+                      *------------------------------------------------------
+E08D  0F20            CLEARTABS       CLR     TABSPTR ;- clear msb tabs pointer
+E08F  0F21                    CLR     TABSPTR+1       ;- clear lsb tabs pointer
+E091  0F1F                    CLR     NTABS   ;- clear tabs count
+E093  39                      RTS
+                      
+                      *------------------------------------------------------
+                      * PROCESSTABS: process tabs
+                      *------------------------------------------------------
+E094  3416            PROCESSTABS     PSHS    D,X
+E096  9E20                    LDX     TABSPTR
+E098  2711                    BEQ     1F
+E09A  D61E                    LDB     CTAB
+E09C  D11F                    CMPB    NTABS
+E09E  250B                    BCS     1F
+E0A0  BDE269          2       JSR     PRTSPACE
+E0A3  9623                    LDA     COL
+E0A5  A185                    CMPA    B,X
+E0A7  26F7                    BNE     2B
+E0A9  0C1E                    INC     CTAB
+E0AB  3596            1       PULS    D,X,PC
+                      
+                      *------------------------------------------------------
+                      * CONINIT: Initialise the console
+                      *------------------------------------------------------
+E0AD  3402            CONINIT PSHS    A
+E0AF  867F                    LDA     #$7F
+E0B1  B7D012                  STA     DSP
+E0B4  8636                    LDA     #%00110110      ;- was a7  
+E0B6  B7D011                  STA     KBDCR
+E0B9  8626                    LDA     #%00100110      ;- was a7  
+E0BB  B7D013                  STA     DSPCR
+E0BE  BDE08D                  JSR     CLEARTABS
+E0C1  0F23                    CLR     COL
+E0C3  0F22                    CLR     ROW
+E0C5  3582                    PULS    A,PC
+                      
+                      *------------------------------------------------------
+                      * CONOUT: output one byte to the console
+                      *------------------------------------------------------
+E0C7  8109            CONOUT  CMPA    #ASCII_HT
+E0C9  2602                    BNE     2F
+E0CB  20C7                    BRA     PROCESSTABS
+E0CD  8D97            2       BSR     ROWCOL
+E0CF  3406                    PSHS    D       ;- save D register
+E0D1  F6D012          1       LDB     DSP     ;- loard CRB
+E0D4  C580                    BITB    #%10000000      ;- bit (B7) cleared yet?
+E0D6  2BF9                    BMI     1B      ;- No, wait for display.
+E0D8  8A80                    ORA     #$80    ;- make sure bit 7 is set
+E0DA  B7D012                  STA     DSP     ;- Output character. Sets DA.
+E0DD  3586                    PULS    D,PC    ;- restore D register and return
+                      
+                      *------------------------------------------------------
+                      * CONIN: input one byte from the console
+                      *------------------------------------------------------
+E0DF  B6D011          CONIN   LDA     KBDCR   ;- Key ready?
+E0E2  8580                    BITA    #%10000000      ;- Loop until ready.
+E0E4  2AF9                    BPL     CONIN   ;- no, continue
+E0E6  B6D010                  LDA     KBD     ;- Load character 
+E0E9  847F                    ANDA    #$7F    ;- remove bit 7
+E0EB  39                      RTS
+                      
+                              END
+                              INCLUDE "common/getline.asm"
+                                     SECTION  "CODE"
+                      
+                      *------------------------------------------------------
+                      * get a line from terminal
+                      *------------------------------------------------------
+E0EC  862E            GETLINE LDA     #'.'
+E0EE  BDE0C7                  JSR     CONOUT
+E0F1  0F05                    CLR     LINELENGTH
+E0F3  BDE0DF          GETLINE1        JSR     CONIN
+E0F6  BDE0C7                  JSR     CONOUT
+E0F9  A780                    STA     ,X+
+E0FB  0C05                    INC     LINELENGTH
+E0FD  5A                      DECB
+E0FE  C101                    CMPB    #$01
+E100  2F04                    BLE     GETLINEEND
+                              IF      REPLICA1
+                              CMPA    #$0D
+                              ELSE
+E102  810A                    CMPA    #$0A
+                              ENDIF
+E104  26ED                    BNE     GETLINE1
+E106  8600            GETLINEEND      LDA     #$00
+E108  A784                    STA     ,X
+E10A  39                      RTS
+                      
+                              END
+                              INCLUDE "common/get.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * GETBYTE get a byte from input buffer
+                      *------------------------------------------------------
+E10B  3410            GETBYTE PSHS    X
+E10D  BDE3B4                  JSR             UPCASE
+E110  EC84                    LDD             ,X
+E112  BDE1C9                  JSR             HEXA2BYTE
+E115  2502                    BCS             GETBYTEERR
+E117  1CFE                    ANDCC   #$FE
+E119  3590            GETBYTEERR      PULS    X,PC
+                      
+                      *------------------------------------------------------
+                      * GETWORD  get a word from input buffer
+                      *------------------------------------------------------
+E11B  3410            GETWORD PSHS    X       ;- save X register
+E11D  BDE3B4                  JSR     UPCASE
+E120  EC81                    LDD     ,X++    ;- get 2 hexa bytes in D
+E122  BDE1C9                  JSR     HEXA2BYTE       ;- convert to binary
+E125  250F                    BCS     GETWORDERR      ;- if convert failed, exit
+E127  3402                    PSHS    A       ;- save A (fist byte in binary)
+E129  EC81                    LDD     ,X++    ;- get next 2 hexa bytes
+E12B  BDE1C9                  JSR     HEXA2BYTE       ;- convert to binary
+E12E  2506                    BCS     GETWORDERR      ;- if convert failed, exit
+E130  1F89                    TFR     A,B     ;- move A to B 
+E132  3502                    PULS    A       ;- retrive A
+E134  1CFE                    ANDCC   #$FE    ;- clear carry
+E136  3590            GETWORDERR      PULS    X,PC    ;- restore X and return
+                      
+                      
+                      *------------------------------------------------------
+                      * GETSRC get src and dst address in input buffer
+                      *------------------------------------------------------
+E138  BDE37B          GETSRCDST       JSR     FETCHWORD       ;- fetch one word
+E13B  2509                    BCS     GETSRCDSTERR    ;- if carry set, error exit
+E13D  DD06                    STD     SRC     ;- store soure adress
+E13F  BDE37B                  JSR     FETCHWORD       ;- fetch one word
+E142  2502                    BCS     GETSRCDSTERR    ;- if carry set, error exit
+E144  DD08                    STD     DST     ;- store destination address
+E146  39              GETSRCDSTERR    RTS             ;- return
+                      
+                      *------------------------------------------------------
+                      * GETBYTELIST create a list of byte from the input buffer
+                      *------------------------------------------------------
+E147  BDE339          GETBYTELIST     JSR     LEXFETCH        ;- fetch a token
+E14A  251B                    BCS     GETBLISTEND     ;- carry set, no more token
+E14C  8101                    CMPA    #LEX_STRING     ;- is the token a symbol
+E14E  2709                    BEQ     GETBLISTSTR     ;- yes get and insert the byte
+E150  BDE10B                  JSR     GETBYTE ;- get an hexa byte from input buffer
+E153  2517                    BCS     GETBLISTERR     ;- if carry set, conversion error, exit
+E155  A7A0                    STA     ,Y+     ;- store the byte in the memory pointed by Y
+E157  20EE                    BRA     GETBYTELIST     ;- continue with next token
+E159  BDE16D          GETBLISTSTR     JSR     STRLEN  ;- compute source string length
+E15C  1F89                    TFR     A,B     ;- move length to B
+E15E  A680            GETBLIST1       LDA     ,X+     ;- load A from 1st string
+E160  A7A0                    STA     ,Y+     ;- save A to 2nd string
+E162  5A                      DECB            ;- decrement counter
+E163  26F9                    BNE     GETBLIST1       ;- if end of string not met continue
+E165  20E0                    BRA     GETBYTELIST     ;- continue with next token
+E167  1CFE            GETBLISTEND     ANDCC   #$FE    ;- normal end, clear carry
+E169  109F0C                  STY     SCRATCHEND      ;- store scratchpad last address
+E16C  39              GETBLISTERR     RTS             ;- exit
+                      
+                              END
+                              INCLUDE "common/strings.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * compute the lengh of the string pointed by X
+                      *------------------------------------------------------
+E16D  3410            STRLEN  PSHS    X       ;- save X register
+E16F  86FF                    LDA     #$FF    ;- initialize A counter
+E171  4C              STRLEN1 INCA            ;- increment byte count (A)
+E172  6D80                    TST     ,X+     ;- test if end of string (null)
+E174  26FB                    BNE     STRLEN1 ;- no continue
+E176  3590                    PULS    X,PC    ;- restore X and return
+                      
+                      *------------------------------------------------------
+                      * compare 2 strings pointed by X and Y for equality
+                      *------------------------------------------------------
+E178  3432            STRCMP  PSHS    A,X,Y   ;- save registers
+E17A  A680            STRCMPA LDA     ,X+     ;- load A with char from 1st string
+E17C  A1A0                    CMPA    ,Y+     ;- compare A with char from 2nd string
+E17E  2603                    BNE     STRCMPE ;- does not match, exit
+E180  4D                      TSTA            ;- check if end of string met
+E181  26F7                    BNE     STRCMPA ;- if null found, both string match
+E183  35B2            STRCMPE PULS    X,Y,A,PC        ;- restore registers and return
+                              
+                      *------------------------------------------------------
+                      * copy null terminated string from X to Y
+                      *------------------------------------------------------
+E185  3436            STRCPY  PSHS    D,X,Y   ;- save registers
+E187  BDE16D                  JSR     STRLEN  ;- compute source string length
+E18A  1F89                    TFR     A,B     ;- move length to B
+E18C  A680            STRCPYA LDA     ,X+     ;- load A from 1st string
+E18E  A7A0                    STA     ,Y+     ;- save A to 2nd string
+E190  5A                      DECB            ;- decrement count
+E191  26F9                    BNE     STRCPYA ;- continue until count = zero
+E193  35B6                    PULS    X,Y,D,PC        ;- restore registers and return
+                      
+                              END
+                              INCLUDE "common/converters.asm"
+                              SECTION "CODE"
+                      
+                      *-----------------------------------------------------------
+                      *- convert the byte in A into 2 printable hexa character
+                      *----------------------------------------------------------- 
+E195  3402            BYTE2HEXA       PSHS    A
+E197  8D08                    BSR     NIBBLE2HEXA
+E199  1F89                    TFR     A,B
+E19B  3502                    PULS    A
+E19D  44                      LSRA
+E19E  44                      LSRA
+E19F  44                      LSRA
+E1A0  44                      LSRA
+                      *- falltrough
+                      *-----------------------------------------------------------
+                      *- convert the nibble in A into a printable hexa character
+                      *----------------------------------------------------------- 
+E1A1  840F            NIBBLE2HEXA     ANDA    #$0F
+E1A3  8B90                    ADDA    #$90
+E1A5  19                      DAA
+E1A6  8940                    ADCA    #$40
+E1A8  19                      DAA
+E1A9  39                      RTS
+                      
+                      *-----------------------------------------------------------
+                      *- convert the hexa digit in A into a nibble
+                      *----------------------------------------------------------- 
+E1AA  8130            HEXA2NIBBLE     CMPA    #'0'
+E1AC  2D18                    BLT     HEXA2NIBBLE3
+E1AE  8139                    CMPA    #'9'
+E1B0  2E05                    BGT     HEXA2NIBBLE2
+E1B2  840F                    ANDA    #$0F
+E1B4  1CFE                    ANDCC   #$FE
+E1B6  39                      RTS
+E1B7  8141            HEXA2NIBBLE2    CMPA    #'A'
+E1B9  2D0B                    BLT     HEXA2NIBBLE3
+E1BB  8146                    CMPA    #'F'
+E1BD  2E07                    BGT     HEXA2NIBBLE3
+E1BF  8041                    SUBA    #'A'
+E1C1  8B0A                    ADDA    #$0A
+E1C3  1CFE                    ANDCC   #$FE
+E1C5  39                      RTS
+E1C6  1A01            HEXA2NIBBLE3    ORCC    #$01
+E1C8  39                      RTS
+                      
+                      *-----------------------------------------------------------
+                      *- convert 2 hexa digit in D into a byte
+                      *----------------------------------------------------------- 
+E1C9  BDE1AA          HEXA2BYTE       JSR     HEXA2NIBBLE
+E1CC  3402                    PSHS    A
+E1CE  1F98                    TFR     B,A
+E1D0  BDE1AA                  JSR     HEXA2NIBBLE
+E1D3  48                      ASLA
+E1D4  48                      ASLA
+E1D5  48                      ASLA
+E1D6  48                      ASLA
+E1D7  1F89                    TFR     A,B
+E1D9  3502                    PULS    A
+E1DB  59                      ROLB
+E1DC  49                      ROLA
+E1DD  59                      ROLB
+E1DE  49                      ROLA
+E1DF  59                      ROLB
+E1E0  49                      ROLA
+E1E1  59                      ROLB
+E1E2  49                      ROLA
+E1E3  39                      RTS
+                      
+                      *DIV    STD     DIVISOR
+                      *       TFR     X,D
+                      *       LDX     #$0000
+                      *DIVLOOP        SUBD    DIVISOR
+                      *       BCS     DIVEND
+                      *       LEAX    1,X
+                      *       BRA     DIVLOOP
+                      *DIVEND ADDD    DIVISOR
+                      *       RTS
+                      
+                      * stack position 0  counter
+                      * stack position 1  CC
+                      * stack position 2  A
+                      * stack position 3  B
+                      * stack position 4  X
+                      * stack position 6  Y
+                      * stack position 8  PC
+                      
+0006                  DIVISOR SET             6
+                      
+E1E4  3437            DIVXY   PSHS    Y,X,D,CC
+E1E6  C60A                    LDB             #10
+E1E8  3404                    PSHS    B
+E1EA  5F                      CLRB
+E1EB  4F                      CLRA
+E1EC  6865            DIVLP   ASL             5,S
+E1EE  6964                    ROL             4,S
+E1F0  59                      ROLB
+E1F1  49                      ROLA
+E1F2  10A366                  CMPD    DIVISOR,S
+E1F5  2504                    BLO             DIVLT
+E1F7  A366                    SUBD    DIVISOR,S
+E1F9  6C65                    INC             5,S
+E1FB  6AE4            DIVLT   DEC             ,S
+E1FD  26ED                    BNE             DIVLP
+E1FF  ED66                    STD             DIVISOR,S
+E201  3261                    LEAS    1,S
+E203  35B7                    PULS    PC,X,Y,D,CC
+                      
+                      
+                              END
+                              INCLUDE "common/prt.asm"
+                              SECTION "CODE"
+                      
+E205  3416            PRTX    PSHS    X,D
+E207  8658                    LDA     #'X'
+E209  BDE0C7                  JSR     CONOUT
+E20C  863D                    LDA     #'='
+E20E  BDE0C7                  JSR     CONOUT
+E211  1F10                    TFR     X,D
+E213  BDE272                  JSR     PRTWORD
+E216  3596                    PULS    X,D,PC
+                      
+E218  3436            PRTCC   PSHS    D,X,Y
+E21A  3401                    PSHS    CC
+E21C  8643                    LDA     #'C'
+E21E  BDE0C7                  JSR     CONOUT
+E221  8643                    LDA     #'C'
+E223  BDE0C7                  JSR     CONOUT
+E226  863D                    LDA     #'='
+E228  BDE0C7                  JSR     CONOUT
+E22B  8EE5BA                  LDX     #CCFLAGS
+E22E  108E0008                LDY     #$08
+E232  3504                    PULS    B
+E234  A680            PRTCC1  LDA     ,X+
+E236  59                      ROLB
+E237  2502                    BCS     PRTCC2
+E239  862D                    LDA     #'-'
+E23B  BDE0C7          PRTCC2  JSR     CONOUT
+E23E  313F                    LEAY    -1,Y
+E240  26F2                    BNE     PRTCC1
+E242  35B6                    PULS    D,X,Y,PC
+                      
+E244  3406            PRTA    PSHS    D
+E246  1E89                    EXG     A,B
+E248  8641                    LDA     #'A'
+E24A  BDE0C7                  JSR     CONOUT
+E24D  863D                    LDA     #'='
+E24F  BDE0C7                  JSR     CONOUT
+E252  1E89                    EXG     A,B
+E254  BDE27E                  JSR     PRTBYTE
+E257  3586                    PULS    D,PC
+                      
+E259  3406            PRTB    PSHS    D
+E25B  1F98                    TFR     B,A
+E25D  BDE27E                  JSR     PRTBYTE
+E260  3586                    PULS    D,PC
+                      
+E262  3406            PRTD    PSHS    D
+E264  BDE272                  JSR     PRTWORD
+E267  3586                    PULS    D,PC
+                      
+E269  3406            PRTSPACE        PSHS    D
+E26B  8620                    LDA     #' '
+E26D  BDE0C7                  JSR     CONOUT
+E270  3586                    PULS    D,PC
+                      
+                      *-----------------------------------------------------------
+                      *- print the byte in A in hexadecimal
+                      *----------------------------------------------------------- 
+E272  3406            PRTWORD PSHS    D
+E274  BDE27E                  JSR     PRTBYTE
+E277  1F98                    TFR     B,A
+E279  BDE27E                  JSR     PRTBYTE
+E27C  3586                    PULS    D,PC
+                      
+                      *-----------------------------------------------------------
+                      *- print the byte in A in hexadecimal
+                      *----------------------------------------------------------- 
+E27E  3406            PRTBYTE PSHS    D
+E280  17FF12                  LBSR    BYTE2HEXA
+E283  17FE41                  LBSR    CONOUT
+E286  1F98                    TFR     B,A
+E288  17FE3C                  LBSR    CONOUT
+E28B  3586                    PULS    D,PC
+                      
+                      *-----------------------------------------------------------
+                      *- print the prompt
+                      *----------------------------------------------------------- 
+E28D  3406            PRTPROMPT       PSHS    D
+E28F  1F89                    TFR     A,B
+E291  862E                    LDA     #PROMPT
+E293  17FE31                  LBSR    CONOUT
+E296  1F98                    TFR     B,A 
+E298  17FE2C                  LBSR    CONOUT
+E29B  17FFCB                  LBSR    PRTSPACE
+E29E  3586                    PULS    D,PC
+                      
+                      *-----------------------------------------------------------
+                      *- print the input buffer
+                      *----------------------------------------------------------- 
+E2A0  3416            PRTINPUT        PSHS    X,D
+E2A2  8E0200                  LDX     #INPUT
+E2A5  1F10                    TFR     X,D
+E2A7  BDE272                  JSR     PRTWORD
+E2AA  863A                    LDA     #':'
+E2AC  BDE0C7                  JSR     CONOUT
+E2AF  BDE269                  JSR     PRTSPACE
+E2B2  5F                      CLRB
+E2B3  A680            PRTINPUT1       LDA     ,X+
+E2B5  5C                      INCB
+E2B6  D105                    CMPB    LINELENGTH
+E2B8  2708                    BEQ     PRTINPUTEND
+E2BA  BDE27E                  JSR     PRTBYTE
+E2BD  BDE269                  JSR     PRTSPACE
+E2C0  20F1                    BRA     PRTINPUT1
+E2C2  BDE2C7          PRTINPUTEND     JSR     PRTCRLF
+E2C5  3516                    PULS    X,D
+                      
+                      *------------------------------------------------------
+                      * print crlf
+                      *------------------------------------------------------
+E2C7  3406            PRTCRLF PSHS    D
+E2C9  860D                    LDA     #$0D
+E2CB  BDE0C7                  JSR     CONOUT
+                              IF      ! REPLICA1
+E2CE  860A                    LDA     #$0A
+E2D0  BDE0C7                  JSR     CONOUT
+                              ENDIF
+E2D3  3586                    PULS    D,PC
+                      
+                      *------------------------------------------------------
+                      * print a null terminated string
+                      * pointed by X register
+                      *------------------------------------------------------
+E2D5  3412            PRTSTR  PSHS    X,A     ;- save X and A
+E2D7  A680            PRTSTR1 LDA     ,X+     ;- load char from string and increment
+E2D9  2705                    BEQ     PRTSTREND       ;- if 00 exit
+E2DB  BDE0C7                  JSR     CONOUT  ;- print char
+E2DE  20F7                    BRA     PRTSTR1 ;- coninue with next char
+E2E0  3592            PRTSTREND       PULS    A,X,PC  ;- restore registers and return
+                      
+                      *------------------------------------------------------
+                      * PRTSRC print source address
+                      *------------------------------------------------------
+E2E2  3406            PRTSRC  PSHS    D
+E2E4  DC06                    LDD     SRC
+E2E6  BDE272                  JSR     PRTWORD
+E2E9  3586                    PULS    D,PC
+                      
+                      *------------------------------------------------------
+                      * PRTF print with format
+                      *------------------------------------------------------
+E2EB  3436            PRTF    PSHS    D,X,Y
+E2ED  108EE329                LDY     #PRTFTAGS
+E2F1  A680            PRTFLOOP        LDA     ,X+
+E2F3  2722                    BEQ     PRTFEND
+E2F5  8125                    CMPA    #'%'
+E2F7  2619                    BNE     PRTFOUT
+E2F9  A680                    LDA     ,X+
+E2FB  5F                      CLRB
+E2FC  6DA5            PRTF3   TST     B,Y
+E2FE  271B                    BEQ     PRTFERR
+E300  A1A5                    CMPA    B,Y
+E302  2703                    BEQ     PRTF4
+E304  5C                      INCB
+E305  20F5                    BRA     PRTF3
+E307  8EE32D          PRTF4   LDX     #PRTFHANDLER
+E30A  58                      ASLB
+E30B  10AEA5                  LDY     B,Y
+E30E  ADA4                    JSR     ,Y
+                      
+E310  20DF                    BRA     PRTFLOOP
+E312  17FDB2          PRTFOUT LBSR    CONOUT
+E315  20DA                    BRA     PRTFLOOP
+E317  1CFE            PRTFEND ANDCC   #$FE
+E319  3596                    PULS    D,X,PC
+E31B  1A01            PRTFERR ORCC    #$01
+E31D  3596                    PULS    D,X,PC
+                      
+E31F  8625            PRTFPERCENT     LDA     #'%'
+E321  16FDA3                  LBRA    CONOUT
+                      
+E324  DC24            PRTFMODULE      LDD     MODULE
+E326  16FFAC                  LBRA    PRTSTR
+                      
+E329  82256DCD        PRTFTAGS        FCS     2,/%mM/
+E32D  E31F            PRTFHANDLER     FDB     PRTFPERCENT
+E32F  E324                    FDB     PRTFMODULE
+E331  E324                    FDB     PRTFMODULE
+                      
+                              SECTION "DATA"
+E5BA  454648494E5A56C3 CCFLAGS FCS     /EFHINZVC/
+                      
+                      
+                              END
+                              INCLUDE "common/lexer.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * fetch a lexem
+                      *------------------------------------------------------
+E333  8E0200          LEXSTART        LDX     #INPUT  ;- initialize lexer to start
+E336  9F00                    STX     LEXNXT  ;- of input buffer
+E338  39                      RTS
+                      
+E339  3424            LEXFETCH        PSHS    B,Y
+E33B  9E00                    LDX     LEXNXT  ;- retreive next lexer position
+E33D  8600                    LDA     #LEX_SYMBOL     ;- default to lex_symbol
+E33F  9704                    STA     LEXTYPE ;-
+E341  A680            LEXFETCH1       LDA     ,X+     ;- fetch one byte from input buffer
+E343  2722                    BEQ     LEXFETCH3       ;- check for end of input buffer ($00)
+E345  8122                    CMPA    #$22    ;- double quote
+E347  2722                    BEQ     LEXFETCH4       ;- process double quote
+E349  8120                    CMPA    #' '    ;- space
+E34B  2FF4                    BLE     LEXFETCH1       ;- skip space and lower chars
+E34D  1F12                    TFR     X,Y     ;- save current position in Y register
+E34F  313F                    LEAY    -1,Y    ;- adjust current position
+E351  A680            LEXFETCH2       LDA     ,X+     ;- fetch one byte of data
+E353  8120                    CMPA    #' '    ;- check if end of lexeme ' '
+E355  2EFA                    BGT     LEXFETCH2       ;- if char above ' ' continue
+E357  6F82            LEXFETCH7       CLR     ,-X     ;- replace space char by null
+E359  3001                    LEAX    +1,X    ;- adjust X position to end of lexem + 1
+E35B  9F00                    STX     LEXNXT  ;- store X in LEXNXT to retreive it later
+E35D  1F21                    TFR     Y,X     ;- store current position in LEXCUR
+E35F  9F02                    STX     LEXCUR  ;- X also contains the adress of the lexeme found
+E361  9604                    LDA     LEXTYPE ;- return lex type in accumulator
+E363  1CFE                    ANDCC   #$FE    ;- clear carry (no error, continue)
+E365  35A4                    PULS    B,Y,PC  ;- restore registers and return
+                      
+E367  1A01            LEXFETCH3       ORCC    #$01    ;- set carry end of input buffer met
+E369  35A4                    PULS    B,Y,PC
+                      
+E36B  8601            LEXFETCH4       LDA     #LEX_STRING     ;- set type to LEX_STRING
+E36D  9704                    STA     LEXTYPE ;- note: quotes are removed
+E36F  1F12                    TFR     X,Y     ;- save current position in Y
+E371  A680            LEXFETCH5       LDA     ,X+     ;- fetch next byte of data
+E373  27E2                    BEQ     LEXFETCH7       ;- null found stop processing
+E375  8122                    CMPA    #$22    ;- double quote found ?
+E377  27DE                    BEQ     LEXFETCH7       ;- stop processing
+E379  20F6                    BRA     LEXFETCH5       ;- continue with next char
+                      
+                      *------------------------------------------------------
+                      * FETCHWORD fetch src address in input buffer
+                      *------------------------------------------------------
+E37B  BDE339          FETCHWORD       JSR     LEXFETCH        ;- fetch a token
+E37E  2507                    BCS     FETCHWORDERR    ;- if carry set exit, error
+E380  BDE11B                  JSR     GETWORD ;- fetch start address from input buffer
+E383  2502                    BCS     FETCHWORDERR    ;- conversion error, exit
+E385  1CFE                    ANDCC   #$FE    ;- clear carry
+E387  39              FETCHWORDERR    RTS
+                      
+                              END
+                              INCLUDE "common/parser.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * parse the command inside the input buffer
+                      *------------------------------------------------------
+E388  108EE5C2        CMDPARSE        LDY     #CMDTBL ;- initialize Y to start of command table
+E38C  BDE3B4                  JSR     UPCASE  ;- turn token into upper case
+E38F  6DA4            CMDPARSENXT     TST     ,Y      ;- test if end of command table
+E391  2714                    BEQ     CMDPARSEERR     ;- error command not found
+E393  9E02                    LDX     LEXCUR  ;- get addres of current token
+E395  BDE178                  JSR     STRCMP  ;- compare the token with the current command
+E398  2705                    BEQ     CMDGO   ;- if strings are equal execute command
+E39A  BDE3AA                  JSR     CMDNEXT ;- move Y to next entry
+E39D  20F0                    BRA     CMDPARSENXT     ;- try next command
+                      
+E39F  BDE3AA          CMDGO   JSR     CMDNEXT ;- compute next position
+E3A2  10AE3E                  LDY     -2,Y    ;- return to the address of the previous command
+E3A5  6EA4                    JMP     ,Y      ;- call the routine
+                      
+E3A7  1A01            CMDPARSEERR     ORCC    #$01    ;- set carry, error command not found
+E3A9  39                      RTS             ;- return to caller
+                      
+E3AA  1F21            CMDNEXT TFR     Y,X     ;- transfer Y to X 
+E3AC  BDE16D                  JSR     STRLEN  ;- compute the string length
+E3AF  31A6                    LEAY    A,Y     ;- compute Y at end of string
+E3B1  3123                    LEAY    +3,Y    ;- skip the cmd address
+E3B3  39                      RTS             ;- return with Y containing the addres to the next entry
+                      
+                              END
+                              INCLUDE "common/misc.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * UPCASE convert a lexem to upper case
+                      *------------------------------------------------------
+E3B4  3416            UPCASE  PSHS    D,X     ;- push registers
+E3B6  5F                      CLRB            ;- clear byte count (B)
+E3B7  A680            UPCASESTART     LDA     ,X+     ;- load one byte and increment
+E3B9  2715                    BEQ     UPCASEEND       ;- if eq 00 end of input
+E3BB  8122                    CMPA    #$22    ;- if " 
+E3BD  2711                    BEQ     UPCASEEND       ;- exit strings are not converted  
+E3BF  8161                    CMPA    #'a'    ;- if lower than 'a' 
+E3C1  2508                    BLO     UPCASENEXT      ;- no upcase                    
+E3C3  817B                    CMPA    #'{'    ;- if above or equal '{'
+E3C5  2404                    BHS     UPCASENEXT      ;- no upcase
+E3C7  8020                    SUBA    #$20    ;- subtract $20 from to convert
+E3C9  A71F                    STA     -1,X    ;- write back A where it was
+E3CB  5C              UPCASENEXT      INCB            ;- increment the byte count
+E3CC  D105                    CMPB    LINELENGTH      ;- reached the end of line ?            
+E3CE  23E7                    BLS     UPCASESTART     ;- no continue
+E3D0  3596            UPCASEEND       PULS    D,X,PC  ;- restore registers and return
+                              INCLUDE "common/checksum.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDCHKSUMON activate checksum
+                      *------------------------------------------------------
+E3D2  0F1C            CMDCHKSUMON     CLR     CHKSUM  ;- clear msb checksum
+E3D4  0F1D                    CLR     CHKSUM+1        ;- clear lsb checksum
+E3D6  0F1B                    CLR     DOCHKSUM        ;- reset chsksum flag
+E3D8  0A1B                    DEC     DOCHKSUM        ;- set checksum on      
+E3DA  39                      RTS             ;- return
+                      
+                      *------------------------------------------------------
+                      * CMDCHKSUMOFF deactivate checksum
+                      *------------------------------------------------------
+E3DB  0F1B            CMDCHKSUMOFF    CLR     DOCHKSUM        ;- reset checksum flag
+E3DD  39                      RTS             ;- return
+                      
+                      *------------------------------------------------------
+                      * COMPUTECHKSUM compute checksum
+                      *------------------------------------------------------
+E3DE  0D1B            COMPUTECHKSUM   TST     DOCHKSUM        ;- test if checksum computation on
+E3E0  270B                    BEQ     COMPUTECHKSUM1  ;- no skip computation
+E3E2  3406                    PSHS    D       ;- save D register
+E3E4  1F89                    TFR     A,B     ;- transfer char to lsb of D
+E3E6  4F                      CLRA            ;- clear msb of D
+E3E7  D31C                    ADDD    CHKSUM  ;- add current checksum
+E3E9  DD1C                    STD     CHKSUM  ;- store new checksum
+E3EB  3506                    PULS    D       ;- restore D
+E3ED  39              COMPUTECHKSUM1  RTS             ;- return
+                      
+                              END
+                      
+                      
+                      *------------------------------------------------------
+                      * CMDEXIT  exit from monitor
+                      *------------------------------------------------------
+E3EE  4F              CMDEXIT CLRA
+E3EF  3F                      SWI
+                      
+                      *------------------------------------------------------
+                      * interrupt handlers
+                      *------------------------------------------------------
+E3F0  8101            VSWI    CMPA    #SYS_OUTPUT
+E3F2  2604                    BNE     VSWINXT1
+E3F4  17FEDE                  LBSR    PRTSTR
+E3F7  3B                      RTI
+                      
+E3F8  8102            VSWINXT1        CMPA    #SYS_INPUT
+E3FA  2604                    BNE     VSWIERR
+E3FC  17FCED                  LBSR    GETLINE
+E3FF  3B                      RTI
+                      
+E400  3402            VSWIERR PSHS    A
+E402  8EE616                  LDX     #UNDEFSYS
+E405  17FECD                  LBSR    PRTSTR
+E408  3502                    PULS    A
+E40A  17FE71                  LBSR    PRTBYTE
+E40D  17FEB7                  LBSR    PRTCRLF
+E410  3B              VSWIEND RTI
+                      
+E411  8EE604          VSWI2   LDX     #SWI2STR
+E414  17FEBE                  LBSR    PRTSTR
+E417  3B                      RTI
+                      
+E418  8EE60D          VSWI3   LDX     #SWI3STR
+E41B  17FEB7                  LBSR    PRTSTR
+E41E  3B                      RTI
+                      
+E41F  8EE5EB          VIRQ    LDX     #IRQSTR
+E422  17FEB0                  LBSR    PRTSTR
+E425  3B                      RTI
+                      
+E426  8EE5F3          VFIRQ   LDX     #FIRQSTR
+E429  17FEA9                  LBSR    PRTSTR
+E42C  3B                      RTI
+                      
+E42D  8EE5E3          VNMI    LDX     #NMISTR
+E430  17FEA2                  LBSR    PRTSTR
+E433  3B                      RTI
+                      
+                      
+                      
+                              INCLUDE "commands/cmddump.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDDUMP dump memory
+                      *------------------------------------------------------
+E434  BDE138          CMDDUMP JSR     GETSRCDST
+E437  2523                    BCS     2F
+E439  109E06                  LDY     SRC
+E43C  863A            1       LDA     #':'
+E43E  BDE28D                  JSR     PRTPROMPT
+E441  1F20                    TFR     Y,D
+E443  BDE272                  JSR     PRTWORD
+E446  BDE269                  JSR     PRTSPACE
+E449  3420                    PSHS    Y
+E44B  8D12                    BSR     CMDDUMPHEX
+E44D  3520                    PULS    Y
+E44F  8D1C                    BSR     CMDDUMPASC
+E451  BDE2C7                  JSR     PRTCRLF 
+E454  109C08                  CMPY    DST
+E457  23E3                    BLS     1B
+E459  1CFE                    ANDCC   #$FE
+E45B  39                      RTS
+E45C  1A01            2       ORCC    #$01
+E45E  39                      RTS
+                      
+E45F  C608            CMDDUMPHEX      LDB     #$08
+E461  A6A0            1       LDA     ,Y+
+E463  BDE27E                  JSR     PRTBYTE
+E466  BDE269                  JSR     PRTSPACE
+E469  5A                      DECB
+E46A  26F5                    BNE     1B
+E46C  39                      RTS
+                      
+E46D  C608            CMDDUMPASC      LDB     #$08
+E46F  A6A0            1       LDA     ,Y+
+E471  8120                    CMPA    #' '
+E473  2C02                    BGE     2F
+E475  862E                    LDA     #'.'
+E477  BDE0C7          2       JSR     CONOUT
+E47A  5A                      DECB
+E47B  26F2                    BNE     1B
+E47D  39                      RTS
+                      
+                              END
+                              INCLUDE "commands/cmdedit.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDEDIT modify memory
+                      *------------------------------------------------------
+E47E  BDE37B          CMDEDIT JSR     FETCHWORD       ;- get source address
+E481  1F02                    TFR     D,Y     ;- transfer D to Y (needed for GETBYTELIST)
+E483  BDE147                  JSR     GETBYTELIST     ;- get byte list
+E486  2502                    BCS     CMDEDITERR      ;- if carry set, error, exit
+E488  1CFE            CMDEDITEND      ANDCC   #$FE
+E48A  39              CMDEDITERR      RTS
+                      
+                              END
+                              INCLUDE "commands/cmdexec.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDEXEC  execute user code
+                      *------------------------------------------------------
+E48B  BDE339          CMDEXEC JSR     LEXFETCH
+E48E  2509                    BCS     CMDEXECERR
+E490  BDE11B                  JSR     GETWORD ;- fetch start address from input buffer
+E493  25F5                    BCS     CMDEDITERR
+E495  1F01                    TFR     D,X
+E497  AD84                    JSR     ,X
+E499  39              CMDEXECERR      RTS
+                      
+                              END
+                              INCLUDE "commands/cmdhunt.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDHUNT search a pattern in memory
+                      *------------------------------------------------------
+E49A  BDE138          CMDHUNT JSR     GETSRCDST       ;- get source and destination address
+E49D  2545                    BCS     CMDHUNTERR      ;- if carry set, error, exit
+E49F  108E0280                LDY     #SCRATCHAREA    ;- store temporary data in scratcharea
+E4A3  BDE147                  JSR     GETBYTELIST     ;- get byte list
+E4A6  253C                    BCS     CMDHUNTERR      ;- if carry set, error, exit
+E4A8  9E06                    LDX     SRC     ;- load src
+E4AA  301F                    LEAX    -1,X    ;- decrement to compensate next increment
+E4AC  9F06                    STX     SRC     ;- store src
+E4AE  C608            CMDHUNT3        LDB     #$08    ;- maximum count of addresses printed
+E4B0  9E06            CMDHUNT2        LDX     SRC     ;- load src
+E4B2  3001                    LEAX    1,X     ;- increment current position
+E4B4  9F06                    STX     SRC     ;- store src
+E4B6  108E0280                LDY     #SCRATCHAREA    ;- set Y to start of scratch area
+E4BA  9C08            CMDHUNT1        CMPX    DST     ;- compare with last address
+E4BC  241D                    BHS     CMDHUNTEND      ;- exit if higher or same
+E4BE  A680                    LDA     ,X+     ;- load A with data from SRC
+E4C0  A1A0                    CMPA    ,Y+     ;- compare A with pattern in scratcharea
+E4C2  26EC                    BNE     CMDHUNT2        ;- mismatch increment src and restart
+E4C4  9C08                    CMPX    DST     ;- checjing with DST address
+E4C6  2413                    BHS     CMDHUNTEND      ;- if higher or same, exit
+E4C8  109C0C                  CMPY    SCRATCHEND      ;- check if end of pattern
+E4CB  25E3                    BLO     CMDHUNT2        ;- no continue with next byte
+E4CD  BDE2E2                  JSR     PRTSRC  ;- display matched address 
+E4D0  BDE269                  JSR     PRTSPACE        ;- display a space
+E4D3  5A                      DECB            ;- decrement address count
+E4D4  26DA                    BNE     CMDHUNT2        ;- if not yet 0 continue
+E4D6  BDE2C7                  JSR     PRTCRLF ;- print cr lf
+E4D9  20D3                    BRA     CMDHUNT3        ;- reinitialise counter and continue
+E4DB  C108            CMDHUNTEND      CMPB    #$08
+E4DD  2703                    BEQ     CMDHUNTEXIT
+E4DF  BDE2C7                  JSR     PRTCRLF
+E4E2  1CFE            CMDHUNTEXIT     ANDCC   #$FE
+E4E4  39              CMDHUNTERR      RTS
+                      
+                              END
+                              INCLUDE "commands/cmdfill.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDFILL fill memory with a pattern
+                      *------------------------------------------------------
+E4E5  BDE138          CMDFILL JSR     GETSRCDST       ;- get source and destination address
+E4E8  2520                    BCS     CMDFILLERR      ;- if carry set, error, exit
+E4EA  108E0280                LDY     #SCRATCHAREA    ;- store temporary data in scratcharea
+E4EE  BDE147                  JSR     GETBYTELIST     ;- get byte list
+E4F1  2517                    BCS     CMDFILLERR      ;- if carry set, error, exit
+E4F3  9E06                    LDX     SRC     ;- load src
+E4F5  108E0280        CMDFILL2        LDY     #SCRATCHAREA    ;- set Y to start of scratch area
+E4F9  A6A0            CMDFILL1        LDA     ,Y+     ;- load A with data from pattern
+E4FB  A780                    STA     ,X+     ;- store A 
+E4FD  9C08                    CMPX    DST     ;- checjing with DST address
+E4FF  2207                    BHI     CMDFILLEXIT     ;- exit if higher or same
+E501  109C0C                  CMPY    SCRATCHEND      ;- compare with end address of scratch area
+E504  25F3                    BLO     CMDFILL1        ;- if lower conntinue  (inner loop)
+E506  20ED                    BRA     CMDFILL2        ;- continue (outer loop)
+E508  1CFE            CMDFILLEXIT     ANDCC   #$FE    ;- clear carry
+E50A  39              CMDFILLERR      RTS             ;- return
+                      
+                              END
+                              INCLUDE "commands/cmdmmov.asm"
+                              SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDMMOV move memory block
+                      *------------------------------------------------------
+E50B  0F10            CMDMMOV CLR     MMOVDIR ;- clear movdir flag (default X -> Y)
+E50D  BDE37B                  JSR     FETCHWORD       ;- fetch a word from input
+E510  2532                    BCS     CMDMMOVERR      ;- error exit with carry set
+E512  DD06                    STD     SRC     ;- store to source address
+E514  BDE37B                  JSR     FETCHWORD       ;- fetch a word from input
+E517  252B                    BCS     CMDMMOVERR      ;- error exit with carry set
+E519  9306                    SUBD    SRC     ;- substract source address
+E51B  DD0E                    STD     LEN     ;- store length
+E51D  BDE37B                  JSR     FETCHWORD       ;- fetch a word from input
+E520  2522                    BCS     CMDMMOVERR      ;- error exit with carry set
+E522  DD08                    STD     DST     ;- store to destination address
+E524  9E06                    LDX     SRC     ;- load source address in X
+E526  109E08                  LDY     DST     ;- load destination address in Y
+E529  9C08                    CMPX    DST     ;- compare with dst
+E52B  2715                    BEQ     CMDMMOVEND      ;- src = dst no need to move
+E52D  220E                    BHI     CMDMOVE ;- perform forward move
+E52F  0A10                    DEC     MMOVDIR ;- do transfer backward
+E531  1F10                    TFR     X,D     ;- move SRC to D
+E533  D30E                    ADDD    LEN     ;- add length
+E535  1F01                    TFR     D,X     ;- return SRC to X    
+E537  1F20                    TFR     Y,D     ;- move DST to D
+E539  D30E                    ADDD    LEN     ;- add length
+E53B  1F02                    TFR     D,Y     ;- return DST to Y
+E53D  DC0E            CMDMOVE LDD     LEN     ;- load length in D
+E53F  BDE545                  JSR     MMOVXFER        ;- do real transfer
+E542  1CFE            CMDMMOVEND      ANDCC   #$FE    ;- clear carry
+E544  39              CMDMMOVERR      RTS             ;- return
+                      
+                      *------------------------------------------------------
+                      * MMOVXFER move memory block X = source, Y = destination
+                      *          D = len  MMOVDIR bit 7 = direction
+                      *------------------------------------------------------
+E545  3436            MMOVXFER        PSHS    D,X,Y   ;- LEN, SRC, DST
+E547  3402            MMOVNEXT        PSHS    A       ;- save A registers
+E549  A684                    LDA     ,X      ;- load byte from SRC
+E54B  A7A4                    STA     ,Y      ;- save byte to DST
+E54D  0D10                    TST     MMOVDIR ;- check direction
+E54F  2606                    BNE     MMOVDEC ;- backward, decrement
+E551  3001                    LEAX    1,X     ;- increment X
+E553  3121                    LEAY    1,Y     ;- increment Y
+E555  2004                    BRA     MMOVLEN ;- compute new length
+E557  301F            MMOVDEC LEAX    -1,X    ;- decrement X
+E559  313F                    LEAY    -1,Y    ;- decrement Y
+E55B  3502            MMOVLEN PULS    A       ;- restore A
+E55D  830001                  SUBD    #$0001  ;- decrement length
+E560  2AE5                    BPL     MMOVNEXT        ;- if still positive contine
+E562  1CFE                    ANDCC   #$FE    ;- clear carry
+E564  35B6                    PULS    D,X,Y,PC        ;- restore registers and return
+                      
+                              END
+                              INCLUDE "commands/cmdmcmp.asm"
+                                      SECTION "CODE"
+                      
+                      *------------------------------------------------------
+                      * CMDMCMP compare memory block
+                      *------------------------------------------------------
+E566  BDE37B          CMDMCMP         JSR     FETCHWORD       ;- fetch a word from input
+E569  254E                            BCS     CMDMCMPERR      ;- error exit with carry set
+E56B  DD06                            STD     SRC             ;- store to source address
+E56D  BDE37B                          JSR     FETCHWORD       ;- fetch a word from input
+E570  2547                            BCS     CMDMCMPERR      ;- error exit with carry set
+E572  9306                            SUBD    SRC             ;- substract source address
+E574  DD0E                            STD     LEN             ;- store length
+E576  BDE37B                          JSR     FETCHWORD       ;- fetch a word from input
+E579  253E                            BCS     CMDMCMPERR      ;- error exit with carry set
+E57B  DD08                            STD     DST             ;- store to destination address
+E57D  9E06                            LDX     SRC             ;- load source address in X
+E57F  109E08                          LDY     DST             ;- load destination address in Y
+E582  9C08                            CMPX    DST             ;- compare with dst        
+E584  2731                            BEQ     CMDMCMPEND      ;- src = dst no need to compare
+E586  8608                            LDA     #$08
+E588  9711                            STA     COUNT
+E58A  DC0E                            LDD     LEN             ;- load length in D
+E58C  3406            CMDMCMPNEXT     PSHS    D
+E58E  A680                            LDA     ,X+
+E590  A1A0                            CMPA    ,Y+
+E592  2713                            BEQ     CMDMCMPDEC
+E594  1F10                            TFR     X,D
+E596  BDE272                          JSR     PRTWORD
+E599  BDE269                          JSR     PRTSPACE
+E59C  0A11                            DEC     COUNT
+E59E  2A07                            BPL     CMDMCMPDEC
+E5A0  BDE2C7                          JSR     PRTCRLF
+E5A3  8608                            LDA     #$08
+E5A5  9711                            STA     COUNT
+E5A7  3506            CMDMCMPDEC      PULS    D
+E5A9  830001                          SUBD    #$0001
+E5AC  2ADE                            BPL     CMDMCMPNEXT
+E5AE  9611                            LDA     COUNT
+E5B0  8108                            CMPA    #$08
+E5B2  2703                            BEQ     CMDMCMPEND
+E5B4  BDE2C7                          JSR     PRTCRLF
+E5B7  1CFE            CMDMCMPEND      ANDCC   #$FE            ;- clear carry
+E5B9  39              CMDMCMPERR      RTS                     ;- return
+                      
+                      *       INCLUDE "commands/cmdload.asm"
+                      
+                              SECTION "DATA"
+                              
+E5C2  4300            CMDTBL  FCC     /C/,$00
+E5C4  E566                    FDB     CMDMCMP
+E5C6  4600                    FCC     /F/,$00
+E5C8  E4E5                    FDB     CMDFILL
+E5CA  4700                    FCC     /G/,$00
+E5CC  E48B                    FDB     CMDEXEC
+E5CE  4800                    FCC     /H/,$00
+E5D0  E49A                    FDB     CMDHUNT
+                      *       FCC     /L/,$00
+                      *       FDB     CMDLOAD
+E5D2  4D00                    FCC     /M/,$00
+E5D4  E434                    FDB     CMDDUMP
+E5D6  5400                    FCC     /T/,$00
+E5D8  E50B                    FDB     CMDMMOV
+E5DA  3A00                    FCC     /:/,$00
+E5DC  E47E                    FDB     CMDEDIT
+E5DE  5800                    FCC     /X/,$00
+E5E0  E3EE                    FDB     CMDEXIT
+E5E2  00                      FCC     $00
+                      
+E5E3  2A4E4D492A0D0A00 NMISTR  FCN     /*NMI*/,$0D,$0A
+E5EB  2A4952512A0D0A00 IRQSTR  FCN     /*IRQ*/,$0D,$0A
+E5F3  2A464952512A0D0A00 FIRQSTR FCN     /*FIRQ*/,$0D,$0A
+E5FC  2A5357492A0D0A00 SWISTR  FCN     /*SWI*/,$0D,$0A
+E604  2A535749322A0D0A00 SWI2STR FCN     /*SWI2*/,$0D,$0A
+E60D  2A535749332A0D0A00 SWI3STR FCN     /*SWI3*/,$0D,$0A
+E616  556E646566696E65642073797374656D2063616C6C202400 UNDEFSYS        FCN     /Undefined system call $/
+E62E  5245504C49434120312036383039204D4F4E49544F520D0A00 BANNER  FCN     /REPLICA 1 6809 MONITOR/,$0D,$0A
+E647  45584954494E472E2E2E0D0A00 MSGEXIT FCN     /EXITING.../,$0D,$0A
+E654  44554D50494E472E2E2E0D0A00 MSGDUMP FCN     /DUMPING.../,$0D,$0A
+                      
+                      *EMOK   EQU     (MOK - ERRORTAB)/2
+                      *EBADRECORDTYPE EQU     (MBADRECORDTYPE - ERRORTAB)/2
+                      *ENORECORDTYPE  EQU     (MNORECORDTYPE - ERRORTAB)/2
+                      *EBADRECORDADDRESS      EQU     (MBADRECORDADDRESS - ERRORTAB)/2 
+                      *ENORECORDLENGTH        EQU     (MNORECORDLENGTH - ERRORTAB)/2
+                      *ENORECORDCHECKSUM      EQU     (MNORECORDCHECKSUM - ERRORTAB)/2
+                      *EBADRECORDCHECKSUM     EQU     (MBADRECORDCHECKSUM - ERRORTAB)/2
+                      *EBADRECORDDATA EQU     (MBADRECORDDATA - ERRORTAB)/2
+                      
+                      *ERRORTAB       SECTION "ERRORTAB"
+                      *MOK    FDB     MSGOK
+                      *MBADRECORDTYPE FDB     MSGBADRECORDTYPE
+                      *MNORECORDTYPE  FDB     MSGNORECORDTYPE
+                      *MBADRECORDADDRESS      FDB     MSGBADRECORDADDRESS
+                      *MNORECORDLENGTH        FDB     MSGNORECORDLENGTH
+                      *MNORECORDCHECKSUM      FDB     MSGNORECORDCHECKSUM
+                      *MBADRECORDCHECKSUM     FDB     MSGBADRECORDCHECKSUM
+                      *MBADRECORDDATA FDB     MSGBADRECORDDATA
+                      
+                      
+                      *       SECTION "ERRORS"
+                      *MSGOK  FCC     /OK/
+                      *MSGBADRECORDTYPE       FCC     /BAD HEX RECORD TYPE/
+                      *MSGNORECORDTYPE        FCC     /NO HEX RECORD TYPE/
+                      *MSGBADRECORDADDRESS    FCC     /BAD %M RECORD ADDRESS/
+                      *MSGNORECORDLENGTH      FCC     /NO %M RECORD LENGTH/
+                      *MSGNORECORDCHECKSUM    FCC     /NO %M RECORD CHECKSUM/
+                      *MSGBADRECORDCHECKSUM   FCC     /BAD %M RECORD CHECKSUM/
+                      *MSGBADRECORDDATA       FCC     /BAD %M RECORD DATA/
+                      
+                      
+                      
+                      * RESET AND INTERRUPT VECTORS
+                              SECTION "VECTORS"
+FFF0                          ORG     $FFF0
+                      
+FFF0  0000                    FDB     0       ;RESERVED VECTOR
+FFF2  E418                    FDB     VSWI3   ;GO TEST SWI3 FOR SUP CALL
+FFF4  E411                    FDB     VSWI2   ;SWI2 VECTOR
+FFF6  E426                    FDB     VFIRQ   ;FIRQ VECTOR
+FFF8  E41F                    FDB     VIRQ    ;IRQ VECTOR
+FFFA  E3F0                    FDB     VSWI    ;SOFTWARE INTERRUPT
+FFFC  E42D                    FDB     VNMI    ;NMI VECTOR DIRECTLY TO NMI RETURN
+FFFE  E000                    FDB     VRESET  ;RESTART FOR RESET OR POWERUP
+                      
+                              END     VRESET
