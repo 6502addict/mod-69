@@ -19,5 +19,12 @@ X                               leave the monitor if called from another applica
 <br>
 Note: for the commands C , H and :the pattern can include strings  example:   01 02 "Hello" 03 04<br>
 
+## Note
+the monitor can be built for a real replica 1 or for a replica 1 simulator 
+fore the real replica make sur that the following parameter is set to 1
+in mon6809.asm
+
+REPLICA1          EQU    1
+
 
 
